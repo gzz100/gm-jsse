@@ -6,19 +6,19 @@ import java.net.Socket;
 import java.net.UnknownHostException;
 import java.security.SecureRandom;
 
+import javax.net.ssl.KeyManager;
 import javax.net.ssl.SSLSessionContext;
 import javax.net.ssl.SSLSocketFactory;
-import javax.net.ssl.X509KeyManager;
 import javax.net.ssl.X509TrustManager;
 
 public class GMSSLSocketFactory extends SSLSocketFactory {
 
     private final X509TrustManager trustManager;
-    private final X509KeyManager keyManager;
+    private final KeyManager keyManager;
     private final SecureRandom random;
     private final SSLSessionContext sessionContext;
 
-    public GMSSLSocketFactory(X509KeyManager keyManager, X509TrustManager trustManager, SecureRandom random,
+    public GMSSLSocketFactory(KeyManager keyManager, X509TrustManager trustManager, SecureRandom random,
             SSLSessionContext sessionContext) {
         this.trustManager = trustManager;
         this.keyManager = keyManager;

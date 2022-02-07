@@ -3,6 +3,7 @@ package com.aliyun.gmsse;
 import com.aliyun.gmsse.Record.ContentType;
 import com.aliyun.gmsse.crypto.Crypto;
 import com.aliyun.gmsse.handshake.Certificate;
+import com.aliyun.gmsse.handshake.CertificateVerify;
 import com.aliyun.gmsse.handshake.ClientHello;
 import com.aliyun.gmsse.handshake.ClientKeyExchange;
 import com.aliyun.gmsse.handshake.Finished;
@@ -13,6 +14,9 @@ import com.aliyun.gmsse.record.AppDataInputStream;
 import com.aliyun.gmsse.record.AppDataOutputStream;
 import com.aliyun.gmsse.record.ChangeCipherSpec;
 import com.aliyun.gmsse.record.Handshake;
+import com.aliyun.gmsse.record.Handshake.Type;
+
+import cn.gmssl.jce.skf.IKeyManager;
 
 import org.bouncycastle.crypto.engines.SM4Engine;
 import org.bouncycastle.crypto.params.KeyParameter;
@@ -235,20 +239,29 @@ public class GMSSLSocket extends SSLSocket {
         sendClientHello();
 
         // recive ServerHello
-        receiveServerHello();
+        ByteArrayInputStream _input = receiveServerHello();
 
         // recive ServerCertificate
-        receiveServerCertificate();
+       receiveServerCertificate(_input);
 
         // recive ServerKeyExchange
-        receiveServerKeyExchange();
+        receiveServerKeyExchange(_input);
 
         // recive ServerHelloDone
-        receiveServerHelloDone();
+        receiveServerHelloDone(_input);
+        
+        if(session.certificateRequest)
+        {
+        	sendClientCertificate();
+        }
 
         // send ClientKeyExchange
         sendClientKeyExchange();
 
+        if(session.certificateRequest)
+        {
+        	sendCertificateVerify();
+        }
         // send ChangeCipherSpec
         sendChangeCipherSpec();
 
@@ -263,6 +276,7 @@ public class GMSSLSocket extends SSLSocket {
     }
 
     private void receiveFinished() throws IOException {
+    	System.out.println("===>receiveFinished");
         Record rc = recordStream.read(true);
         Handshake hs = Handshake.read(new ByteArrayInputStream(rc.fragment));
         Finished finished = (Finished) hs.body;
@@ -274,6 +288,7 @@ public class GMSSLSocket extends SSLSocket {
     }
 
     private void receiveChangeCipherSpec() throws IOException {
+    	System.out.println("===>receiveChangeCipherSpec");
         Record rc = recordStream.read();
         ChangeCipherSpec ccs = ChangeCipherSpec.read(new ByteArrayInputStream(rc.fragment));
     }
@@ -292,6 +307,32 @@ public class GMSSLSocket extends SSLSocket {
         Record rc = new Record(ContentType.CHANGE_CIPHER_SPEC, version, new ChangeCipherSpec().getBytes());
         recordStream.write(rc);
     }
+    
+    private void sendClientCertificate() throws IOException {
+        ProtocolVersion version = ProtocolVersion.NTLS_1_1;
+        X509Certificate[] _cert = new X509Certificate[2];
+        try {
+			_cert[0] = ((IKeyManager)session.keyManager).getCert(1);
+	        _cert[1] = ((IKeyManager)session.keyManager).getCert(0);
+		} catch (CertificateException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+        Certificate ckex = new Certificate(_cert) ;
+        Handshake hs = new Handshake(Handshake.Type.CERTIFICATE, ckex);
+        Record rc = new Record(ContentType.HANDSHAKE, version, hs.getBytes());
+        recordStream.write(rc);
+        handshakes.add(hs);
+    }
+    
+    private void sendCertificateVerify() throws IOException {
+        ProtocolVersion version = ProtocolVersion.NTLS_1_1;
+        CertificateVerify cv = new CertificateVerify((IKeyManager)session.keyManager,handshakes);
+        Handshake hs = new Handshake(Handshake.Type.CERTIFICATE_VERIFY, cv);
+        Record rc = new Record(ContentType.HANDSHAKE, version, hs.getBytes());
+        recordStream.write(rc);
+        handshakes.add(hs);
+    }
 
     private void sendClientKeyExchange() throws IOException {
         ProtocolVersion version = ProtocolVersion.NTLS_1_1;
@@ -308,7 +349,7 @@ public class GMSSLSocket extends SSLSocket {
             throw new SSLException("caculate master secret failed", e);
         }
 
-        // key_block = PRF(SecurityParameters.master_secret，"keyexpansion"，
+        // key_block = PRF(SecurityParameters.master_secret锛�"keyexpansion"锛�
         // SecurityParameters.server_random +SecurityParameters.client_random);
         // new TLSKeyMaterialSpec(masterSecret, TLSKeyMaterialSpec.KEY_EXPANSION,
         // key_block.length, server_random, client_random))
@@ -365,15 +406,40 @@ public class GMSSLSocket extends SSLSocket {
         recordStream.setServerWriteIV(serverWriteIV);
     }
 
-    private void receiveServerHelloDone() throws IOException {
-        Record rc = recordStream.read();
-        Handshake shdf = Handshake.read(new ByteArrayInputStream(rc.fragment));
+    private void receiveServerHelloDone(ByteArrayInputStream _input) throws IOException {
+    	System.out.println("===>receiveServerHelloDone");
+    	if(_input.available() == 0)
+    	{
+            Record rc = recordStream.read();
+            _input = new ByteArrayInputStream(rc.fragment);
+    	}
+        Handshake shdf = Handshake.read(_input);
+        if(shdf.type == Type.CERTIFICATE_REQUEST)
+        {
+        	session.certificateRequest = true;
+        	System.out.println("  ==>Type:" + shdf.type.getValue());
+        	handshakes.add(shdf);
+        	
+        	if(_input.available() == 0)
+        	{
+        		Record rc = recordStream.read();
+        		_input = new ByteArrayInputStream(rc.fragment);
+        	}
+
+            shdf = Handshake.read(_input);
+            System.out.println("  ==>Type:" + shdf.type.getValue());
+        }
         handshakes.add(shdf);
     }
 
-    private void receiveServerKeyExchange() throws IOException {
-        Record rc = recordStream.read();
-        Handshake skef = Handshake.read(new ByteArrayInputStream(rc.fragment));
+    private void receiveServerKeyExchange(ByteArrayInputStream _input) throws IOException {
+    	System.out.println("===>receiveServerKeyExchange");
+    	if(_input.available() == 0)
+    	{
+    		Record rc = recordStream.read();
+    		_input = new ByteArrayInputStream(rc.fragment);
+    	}
+        Handshake skef = Handshake.read(_input);
         ServerKeyExchange ske = (ServerKeyExchange) skef.body;
         // signature cert
         X509Certificate signCert = session.peerCerts[0];
@@ -397,9 +463,14 @@ public class GMSSLSocket extends SSLSocket {
         securityParameters.encryptionCert = encryptionCert;
     }
 
-    private void receiveServerCertificate() throws IOException {
-        Record rc = recordStream.read();
-        Handshake cf = Handshake.read(new ByteArrayInputStream(rc.fragment));
+    private void receiveServerCertificate(ByteArrayInputStream _input) throws IOException {
+    	System.out.println("===>receiveServerCertificate");
+    	if(_input.available() == 0)
+    	{
+    		Record rc = recordStream.read();
+    		_input = new ByteArrayInputStream(rc.fragment);
+    	}
+        Handshake cf = Handshake.read(_input);
         Certificate cert = (Certificate) cf.body;
         X509Certificate[] peerCerts = cert.getCertificates();
         try {
@@ -412,14 +483,15 @@ public class GMSSLSocket extends SSLSocket {
         handshakes.add(cf);
     }
 
-    private void receiveServerHello() throws IOException {
+    private ByteArrayInputStream receiveServerHello() throws IOException {
+    	System.out.println("===>receiveServerHello");
         Record rc = recordStream.read();
         if (rc.contentType != Record.ContentType.HANDSHAKE) {
             Alert alert = new Alert(Alert.Level.FATAL, Alert.Description.UNEXPECTED_MESSAGE);
             throw new AlertException(alert, true);
         }
-
-        Handshake hsf = Handshake.read(new ByteArrayInputStream(rc.fragment));
+        ByteArrayInputStream _input = new ByteArrayInputStream(rc.fragment);
+        Handshake hsf = Handshake.read(_input);
         ServerHello sh = (ServerHello) hsf.body;
         sh.getCompressionMethod();
         // TODO: process the compresion method
@@ -429,6 +501,7 @@ public class GMSSLSocket extends SSLSocket {
         session.sessionId = new GMSSLSession.ID(sh.getSessionId());
         handshakes.add(hsf);
         securityParameters.serverRandom = sh.getRandom();
+        return _input;
     }
 
     private void sendClientHello() throws IOException {

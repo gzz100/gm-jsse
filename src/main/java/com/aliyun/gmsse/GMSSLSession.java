@@ -19,16 +19,18 @@ public class GMSSLSession implements SSLSession {
     ID sessionId;
     public String peerHost;
     public int peerPort;
-    public X509KeyManager keyManager;
+    public KeyManager keyManager;
     public X509TrustManager trustManager;
     public SecureRandom random;
     public boolean peerVerified;
+    public boolean certificateRequest;
 
     public GMSSLSession(List<CipherSuite> enabledSuites, List<ProtocolVersion> enabledProtocols) {
         this.creationTime = System.currentTimeMillis();
         this.enabledSuites = enabledSuites;
         this.enabledProtocols = enabledProtocols;
         this.peerVerified = false;
+        this.certificateRequest = false;
     }
 
     @Override

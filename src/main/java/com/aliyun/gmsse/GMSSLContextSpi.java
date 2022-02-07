@@ -14,12 +14,11 @@ import javax.net.ssl.SSLSessionContext;
 import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
-import javax.net.ssl.X509KeyManager;
 import javax.net.ssl.X509TrustManager;
 
 public class GMSSLContextSpi extends SSLContextSpi {
 
-    private X509KeyManager keyManager;
+    private KeyManager keyManager;
     private X509TrustManager trustManager;
     private SecureRandom random;
     private SSLSessionContext clientSessionContext;
@@ -64,8 +63,8 @@ public class GMSSLContextSpi extends SSLContextSpi {
         trustManager = null;
         if (kms != null) {
             for (int i = 0; i < kms.length; i++) {
-                if (kms[i] instanceof X509KeyManager) {
-                    keyManager = (X509KeyManager) kms[i];
+                if (kms[i] instanceof KeyManager) {
+                    keyManager = kms[i];
                     break;
                 }
             }
