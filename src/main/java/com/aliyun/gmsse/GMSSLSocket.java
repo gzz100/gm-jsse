@@ -16,8 +16,6 @@ import com.aliyun.gmsse.record.ChangeCipherSpec;
 import com.aliyun.gmsse.record.Handshake;
 import com.aliyun.gmsse.record.Handshake.Type;
 
-import cn.gmssl.jce.skf.IKeyManager;
-
 import org.bouncycastle.crypto.engines.SM4Engine;
 import org.bouncycastle.crypto.params.KeyParameter;
 import javax.net.ssl.HandshakeCompletedListener;
