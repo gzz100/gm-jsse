@@ -83,6 +83,11 @@ public class GMSSLSocket extends SSLSocket {
         session = new GMSSLSession(supportedSuites, supportedPtrotocols);
         session.protocol = ProtocolVersion.NTLS_1_1;
     }
+    
+    public GMSSLSocket() {
+    	super();
+    	initialize();
+    }
 
     public GMSSLSocket(InetAddress host, int port) throws IOException {
         super(host, port);
@@ -100,6 +105,13 @@ public class GMSSLSocket extends SSLSocket {
         this.autoClose = autoClose;
         initialize();
     }
+    
+    @Override
+	public void connect(SocketAddress endpoint, int timeout) throws IOException {
+    	remoteHost = ((InetSocketAddress)endpoint).getHostName();
+		super.connect(endpoint, timeout);
+	}
+
 
     @Override
     public void addHandshakeCompletedListener(HandshakeCompletedListener listener) {

@@ -47,6 +47,16 @@ public class GMSSLSocketFactory extends SSLSocketFactory {
     public String[] getSupportedCipherSuites() {
         return null;
     }
+    
+    @Override
+    public Socket createSocket() throws IOException
+    {
+    	GMSSLSocket socket = new GMSSLSocket();
+        socket.session.keyManager = keyManager;
+        socket.session.trustManager = trustManager;
+        socket.session.random = random;
+        return socket;
+    }
 
     @Override
     public Socket createSocket(String host, int port) throws IOException, UnknownHostException {

@@ -9,6 +9,8 @@ import com.aliyun.gmsse.RecordStream;
 public class AppDataInputStream extends InputStream {
 
     private RecordStream recordStream;
+    private Record lastRecord;
+    private int lastRecordAvailableLength = 0;
 
     public AppDataInputStream(RecordStream recordStream) {
         this.recordStream = recordStream;
@@ -23,9 +25,14 @@ public class AppDataInputStream extends InputStream {
 
     @Override
     public int read(byte[] b, int off, int len) throws IOException {
-        Record record = recordStream.read(true);
-        int length = Math.min(record.fragment.length, len);
-        System.arraycopy(record.fragment, 0, b, off, length);
+    	if(lastRecordAvailableLength <= 0)
+    	{
+    		lastRecord = recordStream.read(true);
+    		lastRecordAvailableLength = lastRecord.fragment.length;
+    	}
+        int length = Math.min(lastRecordAvailableLength, len);
+        System.arraycopy(lastRecord.fragment, lastRecord.fragment.length - lastRecordAvailableLength, b, off, length);
+        lastRecordAvailableLength -= length;
         return length;
     }
 }
