@@ -5,6 +5,7 @@ import java.security.Principal;
 import java.security.SecureRandom;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
+import java.util.Arrays;
 import java.util.List;
 
 public class GMSSLSession implements SSLSession {
@@ -153,6 +154,11 @@ public class GMSSLSession implements SSLSession {
 
         public byte[] getId() {
             return id.clone();
+        }
+        
+        public synchronized boolean same(ID other)
+        {
+        	return Arrays.equals(other.id,id);
         }
     }
 

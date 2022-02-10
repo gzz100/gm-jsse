@@ -35,6 +35,7 @@ public class GMSSLSocketFactory extends SSLSocketFactory {
         socket.session.keyManager = keyManager;
         socket.session.trustManager = trustManager;
         socket.session.random = random;
+        socket.session.sessionContext = (SessionContext) sessionContext;
         return socket;
     }
 
@@ -55,6 +56,7 @@ public class GMSSLSocketFactory extends SSLSocketFactory {
         socket.session.keyManager = keyManager;
         socket.session.trustManager = trustManager;
         socket.session.random = random;
+        socket.session.sessionContext = (SessionContext) sessionContext;
         return socket;
     }
 
@@ -64,6 +66,7 @@ public class GMSSLSocketFactory extends SSLSocketFactory {
         socket.session.keyManager = keyManager;
         socket.session.trustManager = trustManager;
         socket.session.random = random;
+        socket.session.sessionContext = (SessionContext) sessionContext;
         return socket;
     }
 

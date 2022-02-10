@@ -77,15 +77,17 @@ public class ClientHello extends Handshake.Body {
         ba.write(version.getMinor());
         // write random
         ba.write(random.getBytes());
+        ba.write(sessionId.length);
+        if(sessionId.length > 0)
+        {
+        	ba.write(sessionId);
+        }
         // write cipher suites
-        int length = suites.size() * 4;
-        ba.write(length >>> 16 & 0xFF);
+        int length = suites.size() * 2;
         ba.write(length >>> 8 & 0xFF);
         ba.write(length & 0xFF);
         for (CipherSuite suite : suites) {
             ba.write(suite.getId());
-            ba.write(suite.getKeyLength() >>> 8 & 0xFF);
-            ba.write(suite.getKeyLength() & 0xFF);
         }
 
         // write compress

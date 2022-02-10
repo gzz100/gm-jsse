@@ -245,48 +245,76 @@ public class GMSSLSocket extends SSLSocket {
     public void startHandshake() throws IOException {
         ensureConnect();
 
+    	byte[] sessionId = null;
+    	SessionKey key = session.sessionContext.getSessionKey(getRemoteSocketAddress().toString());
+    	if(key != null)
+    		sessionId = key.lastSessionID.getId();
+    	else
+        	sessionId = new byte[0];
         // send ClientHello
-        sendClientHello();
+        sendClientHello(sessionId);
 
         // recive ServerHello
         ByteArrayInputStream _input = receiveServerHello();
 
-        // recive ServerCertificate
-       receiveServerCertificate(_input);
-
-        // recive ServerKeyExchange
-        receiveServerKeyExchange(_input);
-
-        // recive ServerHelloDone
-        receiveServerHelloDone(_input);
-        
-        if(session.certificateRequest)
+        if(key == null || !key.lastSessionID.same(session.sessionId))
         {
-        	sendClientCertificate();
+        	System.out.println("===>new TLS Session");
+	        // recive ServerCertificate
+	       receiveServerCertificate(_input);
+	
+	        // recive ServerKeyExchange
+	        receiveServerKeyExchange(_input);
+	
+	        // recive ServerHelloDone
+	        receiveServerHelloDone(_input);
+	        
+	        if(session.certificateRequest)
+	        {
+	        	sendClientCertificate();
+	        }
+	
+	        // send ClientKeyExchange
+	        sendClientKeyExchange();
+	
+	        if(session.certificateRequest)
+	        {
+	        	sendCertificateVerify();
+	        }
+	        
+	        GenerateKeyBlock();
+	        
+	        // send ChangeCipherSpec
+	        sendChangeCipherSpec();
+
+	        // send Finished
+	        sendFinished();
+
+	        // recive ChangeCipherSpec
+	        receiveChangeCipherSpec();
+
+	        // recive finished
+	        receiveFinished();
+        }else {
+        	securityParameters.masterSecret = key.lastMasterKey;
+        	
+        	GenerateKeyBlock();
+            
+            // recive ChangeCipherSpec
+            receiveChangeCipherSpec();
+
+            // recive finished
+            receiveFinished();
+            
+            // send ChangeCipherSpec
+            sendChangeCipherSpec();
+
+            // send Finished
+            sendFinished();
         }
-
-        // send ClientKeyExchange
-        sendClientKeyExchange();
-
-        if(session.certificateRequest)
-        {
-        	sendCertificateVerify();
-        }
-        // send ChangeCipherSpec
-        sendChangeCipherSpec();
-
-        // send Finished
-        sendFinished();
-
-        // recive ChangeCipherSpec
-        receiveChangeCipherSpec();
-
-        // recive finished
-        receiveFinished();
     }
 
     private void receiveFinished() throws IOException {
-    	System.out.println("===>receiveFinished");
         Record rc = recordStream.read(true);
         Handshake hs = Handshake.read(new ByteArrayInputStream(rc.fragment));
         Finished finished = (Finished) hs.body;
@@ -295,10 +323,10 @@ public class GMSSLSocket extends SSLSocket {
             Alert alert = new Alert(Alert.Level.FATAL, Alert.Description.HANDSHAKE_FAILURE);
             throw new AlertException(alert, true);
         }
+        handshakes.add(hs);
     }
 
     private void receiveChangeCipherSpec() throws IOException {
-    	System.out.println("===>receiveChangeCipherSpec");
         Record rc = recordStream.read();
         ChangeCipherSpec ccs = ChangeCipherSpec.read(new ByteArrayInputStream(rc.fragment));
     }
@@ -343,23 +371,10 @@ public class GMSSLSocket extends SSLSocket {
         recordStream.write(rc);
         handshakes.add(hs);
     }
-
-    private void sendClientKeyExchange() throws IOException {
-        ProtocolVersion version = ProtocolVersion.NTLS_1_1;
-        ClientKeyExchange ckex = new ClientKeyExchange(version, session.random, securityParameters.encryptionCert);
-        Handshake hs = new Handshake(Handshake.Type.CLIENT_KEY_EXCHANGE, ckex);
-        Record rc = new Record(ContentType.HANDSHAKE, version, hs.getBytes());
-        recordStream.write(rc);
-        handshakes.add(hs);
-        try {
-            securityParameters.masterSecret = ckex.getMasterSecret(securityParameters.clientRandom,
-                    securityParameters.serverRandom);
-        } catch (Exception e) {
-            e.printStackTrace();
-            throw new SSLException("caculate master secret failed", e);
-        }
-
-        // key_block = PRF(SecurityParameters.master_secret锛�"keyexpansion"锛�
+    
+    private void GenerateKeyBlock() throws IOException
+    {
+    	// key_block = PRF(SecurityParameters.master_secret锛�"keyexpansion"锛�
         // SecurityParameters.server_random +SecurityParameters.client_random);
         // new TLSKeyMaterialSpec(masterSecret, TLSKeyMaterialSpec.KEY_EXPANSION,
         // key_block.length, server_random, client_random))
@@ -416,8 +431,30 @@ public class GMSSLSocket extends SSLSocket {
         recordStream.setServerWriteIV(serverWriteIV);
     }
 
+    private void sendClientKeyExchange() throws IOException {
+        ProtocolVersion version = ProtocolVersion.NTLS_1_1;
+        ClientKeyExchange ckex = new ClientKeyExchange(version, session.random, securityParameters.encryptionCert);
+
+        Handshake hs = new Handshake(Handshake.Type.CLIENT_KEY_EXCHANGE, ckex);
+        Record rc = new Record(ContentType.HANDSHAKE, version, hs.getBytes());
+        recordStream.write(rc);
+        handshakes.add(hs);
+        
+        try {
+            securityParameters.masterSecret = ckex.getMasterSecret(securityParameters.clientRandom,
+                    securityParameters.serverRandom);
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new SSLException("caculate master secret failed", e);
+        }
+        String remoteHost = this.getRemoteSocketAddress().toString();
+        SessionKey key = new SessionKey();
+    	key.lastSessionID = session.sessionId;
+    	key.lastMasterKey = securityParameters.masterSecret;
+    	session.sessionContext.setSessionKey(remoteHost, key);
+    }
+
     private void receiveServerHelloDone(ByteArrayInputStream _input) throws IOException {
-    	System.out.println("===>receiveServerHelloDone");
     	if(_input.available() == 0)
     	{
             Record rc = recordStream.read();
@@ -427,7 +464,6 @@ public class GMSSLSocket extends SSLSocket {
         if(shdf.type == Type.CERTIFICATE_REQUEST)
         {
         	session.certificateRequest = true;
-        	System.out.println("  ==>Type:" + shdf.type.getValue());
         	handshakes.add(shdf);
         	
         	if(_input.available() == 0)
@@ -437,13 +473,11 @@ public class GMSSLSocket extends SSLSocket {
         	}
 
             shdf = Handshake.read(_input);
-            System.out.println("  ==>Type:" + shdf.type.getValue());
         }
         handshakes.add(shdf);
     }
 
     private void receiveServerKeyExchange(ByteArrayInputStream _input) throws IOException {
-    	System.out.println("===>receiveServerKeyExchange");
     	if(_input.available() == 0)
     	{
     		Record rc = recordStream.read();
@@ -474,7 +508,6 @@ public class GMSSLSocket extends SSLSocket {
     }
 
     private void receiveServerCertificate(ByteArrayInputStream _input) throws IOException {
-    	System.out.println("===>receiveServerCertificate");
     	if(_input.available() == 0)
     	{
     		Record rc = recordStream.read();
@@ -494,7 +527,6 @@ public class GMSSLSocket extends SSLSocket {
     }
 
     private ByteArrayInputStream receiveServerHello() throws IOException {
-    	System.out.println("===>receiveServerHello");
         Record rc = recordStream.read();
         if (rc.contentType != Record.ContentType.HANDSHAKE) {
             Alert alert = new Alert(Alert.Level.FATAL, Alert.Description.UNEXPECTED_MESSAGE);
@@ -514,8 +546,7 @@ public class GMSSLSocket extends SSLSocket {
         return _input;
     }
 
-    private void sendClientHello() throws IOException {
-        byte[] sessionId = new byte[0];
+    private void sendClientHello(byte[] sessionId) throws IOException {
         int gmtUnixTime = (int) (System.currentTimeMillis() / 1000L);
         ClientRandom random = new ClientRandom(gmtUnixTime, session.random.generateSeed(28));
         List<CipherSuite> suites = session.enabledSuites;
