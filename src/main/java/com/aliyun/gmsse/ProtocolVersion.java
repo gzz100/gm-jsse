@@ -5,6 +5,7 @@ import java.io.InputStream;
 
 final public class ProtocolVersion implements Comparable {
     public static final ProtocolVersion NTLS_1_1 = new ProtocolVersion(1, 1, "NTLSv1.1");
+    public static final ProtocolVersion TLS_3_3 = new ProtocolVersion(3, 3, "TLSv1.2");
 
     private final int major;
     private final int minor;
@@ -32,7 +33,12 @@ final public class ProtocolVersion implements Comparable {
                 case 1:
                     return NTLS_1_1;
             }
+        }else if (major == 3) {
+            switch (minor) {
+            case 3:
+                return TLS_3_3;
         }
+    }
         return new ProtocolVersion(major, minor, "Unknow Protocol");
     }
 

@@ -16,6 +16,7 @@ import com.aliyun.gmsse.record.ChangeCipherSpec;
 import com.aliyun.gmsse.record.Handshake;
 import com.aliyun.gmsse.record.Handshake.Type;
 
+import org.bouncycastle.crypto.engines.AESEngine;
 import org.bouncycastle.crypto.engines.SM4Engine;
 import org.bouncycastle.crypto.params.KeyParameter;
 import javax.net.ssl.HandshakeCompletedListener;
@@ -50,9 +51,11 @@ public class GMSSLSocket extends SSLSocket {
     static {
         // setup suites
         supportedSuites.add(CipherSuite.NTLS_SM2_WITH_SM4_SM3);
+        supportedSuites.add(CipherSuite.TLS_RSA_WITH_AES_128_CBC_SHA256);
 
         // setup protocols
         supportedPtrotocols.add(ProtocolVersion.NTLS_1_1);
+        supportedPtrotocols.add(ProtocolVersion.TLS_3_3);
     }
 
     GMSSLSession session;
@@ -81,7 +84,6 @@ public class GMSSLSocket extends SSLSocket {
 
     private void initialize() {
         session = new GMSSLSession(supportedSuites, supportedPtrotocols);
-        session.protocol = ProtocolVersion.NTLS_1_1;
     }
     
     public GMSSLSocket() {
@@ -243,6 +245,14 @@ public class GMSSLSocket extends SSLSocket {
 
     @Override
     public void startHandshake() throws IOException {
+    	
+
+        session.protocol = ProtocolVersion.NTLS_1_1;
+        if(Crypto.CryptoType == 1)
+        {
+        	session.protocol = ProtocolVersion.TLS_3_3;
+        }
+        
         ensureConnect();
 
     	byte[] sessionId = null;
@@ -261,13 +271,11 @@ public class GMSSLSocket extends SSLSocket {
         {
         	System.out.println("===>new TLS Session");
 	        // recive ServerCertificate
-	       receiveServerCertificate(_input);
+        	_input = receiveServerCertificate(_input);
 	
-	        // recive ServerKeyExchange
-	        receiveServerKeyExchange(_input);
+	        // recive receiveServerHelloDone
+        	receiveServerHelloDone(_input);
 	
-	        // recive ServerHelloDone
-	        receiveServerHelloDone(_input);
 	        
 	        if(session.certificateRequest)
 	        {
@@ -332,42 +340,37 @@ public class GMSSLSocket extends SSLSocket {
     }
 
     private void sendFinished() throws IOException {
-        ProtocolVersion version = ProtocolVersion.NTLS_1_1;
         Finished finished = new Finished(securityParameters.masterSecret, "client finished", handshakes);
         Handshake hs = new Handshake(Handshake.Type.FINISHED, finished);
-        Record rc = new Record(ContentType.HANDSHAKE, version, hs.getBytes());
+        Record rc = new Record(ContentType.HANDSHAKE, session.protocol, hs.getBytes());
         recordStream.write(rc, true);
         handshakes.add(hs);
     }
 
     private void sendChangeCipherSpec() throws IOException {
-        ProtocolVersion version = ProtocolVersion.NTLS_1_1;
-        Record rc = new Record(ContentType.CHANGE_CIPHER_SPEC, version, new ChangeCipherSpec().getBytes());
+        Record rc = new Record(ContentType.CHANGE_CIPHER_SPEC, session.protocol, new ChangeCipherSpec().getBytes());
         recordStream.write(rc);
     }
     
     private void sendClientCertificate() throws IOException {
-        ProtocolVersion version = ProtocolVersion.NTLS_1_1;
-        X509Certificate[] _cert = new X509Certificate[2];
+        X509Certificate[] _cert = null;
         try {
-			_cert[0] = ((IKeyManager)session.keyManager).getCert(1);
-	        _cert[1] = ((IKeyManager)session.keyManager).getCert(0);
+	        _cert = ((IKeyManager)session.keyManager).getCert();
 		} catch (CertificateException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
         Certificate ckex = new Certificate(_cert) ;
         Handshake hs = new Handshake(Handshake.Type.CERTIFICATE, ckex);
-        Record rc = new Record(ContentType.HANDSHAKE, version, hs.getBytes());
+        Record rc = new Record(ContentType.HANDSHAKE, session.protocol, hs.getBytes());
         recordStream.write(rc);
         handshakes.add(hs);
     }
     
     private void sendCertificateVerify() throws IOException {
-        ProtocolVersion version = ProtocolVersion.NTLS_1_1;
         CertificateVerify cv = new CertificateVerify((IKeyManager)session.keyManager,handshakes);
         Handshake hs = new Handshake(Handshake.Type.CERTIFICATE_VERIFY, cv);
-        Record rc = new Record(ContentType.HANDSHAKE, version, hs.getBytes());
+        Record rc = new Record(ContentType.HANDSHAKE, session.protocol, hs.getBytes());
         recordStream.write(rc);
         handshakes.add(hs);
     }
@@ -384,7 +387,7 @@ public class GMSSLSocket extends SSLSocket {
         byte[] seed = os.toByteArray();
         byte[] keyBlock = null;
         try {
-            keyBlock = Crypto.prf(securityParameters.masterSecret, "key expansion".getBytes(), seed, 128);
+        	keyBlock = Crypto.prf(securityParameters.masterSecret, "key expansion".getBytes(), seed, 128);
         } catch (Exception e) {
             throw new SSLException("caculate key block failed", e);
         }
@@ -409,16 +412,31 @@ public class GMSSLSocket extends SSLSocket {
         // client write key
         byte[] clientWriteKey = new byte[16];
         System.arraycopy(keyBlock, 64, clientWriteKey, 0, 16);
-        SM4Engine writeCipher = new SM4Engine();
-        writeCipher.init(true, new KeyParameter(clientWriteKey));
-        recordStream.setWriteCipher(writeCipher);
+        if(Crypto.CryptoType == 0)
+        {
+        	SM4Engine writeCipher = new SM4Engine();
+            writeCipher.init(true, new KeyParameter(clientWriteKey));
+            recordStream.setWriteCipher(writeCipher);
+        } else {
+        	AESEngine writeCipher = new AESEngine();
+            writeCipher.init(true, new KeyParameter(clientWriteKey));
+            recordStream.setWriteCipher(writeCipher);
+        }
+        
 
         // server write key
         byte[] serverWriteKey = new byte[16];
         System.arraycopy(keyBlock, 80, serverWriteKey, 0, 16);
-        SM4Engine readCipher = new SM4Engine();
-        readCipher.init(false, new KeyParameter(serverWriteKey));
-        recordStream.setReadCipher(readCipher);
+        if(Crypto.CryptoType == 0)
+        {
+	        SM4Engine readCipher = new SM4Engine();
+	        readCipher.init(false, new KeyParameter(serverWriteKey));
+	        recordStream.setReadCipher(readCipher);
+        } else {
+        	AESEngine readCipher = new AESEngine();
+	        readCipher.init(false, new KeyParameter(serverWriteKey));
+	        recordStream.setReadCipher(readCipher);
+        }
 
         // client write iv
         byte[] clientWriteIV = new byte[16];
@@ -432,11 +450,10 @@ public class GMSSLSocket extends SSLSocket {
     }
 
     private void sendClientKeyExchange() throws IOException {
-        ProtocolVersion version = ProtocolVersion.NTLS_1_1;
-        ClientKeyExchange ckex = new ClientKeyExchange(version, session.random, securityParameters.encryptionCert);
+        ClientKeyExchange ckex = new ClientKeyExchange(session.protocol, session.random, securityParameters.encryptionCert);
 
         Handshake hs = new Handshake(Handshake.Type.CLIENT_KEY_EXCHANGE, ckex);
-        Record rc = new Record(ContentType.HANDSHAKE, version, hs.getBytes());
+        Record rc = new Record(ContentType.HANDSHAKE, session.protocol, hs.getBytes());
         recordStream.write(rc);
         handshakes.add(hs);
         
@@ -461,6 +478,36 @@ public class GMSSLSocket extends SSLSocket {
             _input = new ByteArrayInputStream(rc.fragment);
     	}
         Handshake shdf = Handshake.read(_input);
+        if(shdf.type == Type.SERVER_KEY_EXCHANGE)
+        {
+        	ServerKeyExchange ske = (ServerKeyExchange) shdf.body;
+            // signature cert
+            X509Certificate signCert = session.peerCerts[0];
+            // encryption cert
+            X509Certificate encryptionCert = session.peerCerts[1];
+            // verify the signature
+            boolean verified = false;
+
+            try {
+                verified = ske.verify(signCert.getPublicKey(), securityParameters.clientRandom,
+                        securityParameters.serverRandom, encryptionCert);
+            } catch (Exception e2) {
+                throw new SSLException("server key exchange verify fails!", e2);
+            }
+
+            if (!verified) {
+                throw new SSLException("server key exchange verify fails!");
+            }
+
+            handshakes.add(shdf);
+        	if(_input.available() == 0)
+        	{
+        		Record rc = recordStream.read();
+        		_input = new ByteArrayInputStream(rc.fragment);
+        	}
+
+            shdf = Handshake.read(_input);
+        }
         if(shdf.type == Type.CERTIFICATE_REQUEST)
         {
         	session.certificateRequest = true;
@@ -477,37 +524,7 @@ public class GMSSLSocket extends SSLSocket {
         handshakes.add(shdf);
     }
 
-    private void receiveServerKeyExchange(ByteArrayInputStream _input) throws IOException {
-    	if(_input.available() == 0)
-    	{
-    		Record rc = recordStream.read();
-    		_input = new ByteArrayInputStream(rc.fragment);
-    	}
-        Handshake skef = Handshake.read(_input);
-        ServerKeyExchange ske = (ServerKeyExchange) skef.body;
-        // signature cert
-        X509Certificate signCert = session.peerCerts[0];
-        // encryption cert
-        X509Certificate encryptionCert = session.peerCerts[1];
-        // verify the signature
-        boolean verified = false;
-
-        try {
-            verified = ske.verify(signCert.getPublicKey(), securityParameters.clientRandom,
-                    securityParameters.serverRandom, encryptionCert);
-        } catch (Exception e2) {
-            throw new SSLException("server key exchange verify fails!", e2);
-        }
-
-        if (!verified) {
-            throw new SSLException("server key exchange verify fails!");
-        }
-
-        handshakes.add(skef);
-        securityParameters.encryptionCert = encryptionCert;
-    }
-
-    private void receiveServerCertificate(ByteArrayInputStream _input) throws IOException {
+    private ByteArrayInputStream receiveServerCertificate(ByteArrayInputStream _input) throws IOException {
     	if(_input.available() == 0)
     	{
     		Record rc = recordStream.read();
@@ -524,6 +541,12 @@ public class GMSSLSocket extends SSLSocket {
         session.peerCerts = peerCerts;
         session.peerVerified = true;
         handshakes.add(cf);
+
+        if(Crypto.CryptoType == 0)
+        	securityParameters.encryptionCert = session.peerCerts[1];
+        else
+        	securityParameters.encryptionCert = session.peerCerts[0];
+        return _input;
     }
 
     private ByteArrayInputStream receiveServerHello() throws IOException {
@@ -552,10 +575,9 @@ public class GMSSLSocket extends SSLSocket {
         List<CipherSuite> suites = session.enabledSuites;
         List<CompressionMethod> compressions = new ArrayList<CompressionMethod>(2);
         compressions.add(CompressionMethod.NULL);
-        ProtocolVersion version = ProtocolVersion.NTLS_1_1;
-        ClientHello ch = new ClientHello(version, random, sessionId, suites, compressions);
+        ClientHello ch = new ClientHello(session.protocol, random, sessionId, suites, compressions);
         Handshake hs = new Handshake(Handshake.Type.CLIENT_HELLO, ch);
-        Record rc = new Record(Record.ContentType.HANDSHAKE, version, hs.getBytes());
+        Record rc = new Record(Record.ContentType.HANDSHAKE, session.protocol, hs.getBytes());
         recordStream.write(rc);
         handshakes.add(hs);
         securityParameters.clientRandom = random.getBytes();

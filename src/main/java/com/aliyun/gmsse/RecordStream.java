@@ -11,10 +11,13 @@ import java.util.Arrays;
 import javax.net.ssl.SSLException;
 
 import com.aliyun.gmsse.Record.ContentType;
+import com.aliyun.gmsse.crypto.Crypto;
 import com.aliyun.gmsse.record.Alert;
 
+import org.bouncycastle.crypto.BlockCipher;
+import org.bouncycastle.crypto.digests.GeneralDigest;
+import org.bouncycastle.crypto.digests.SHA256Digest;
 import org.bouncycastle.crypto.digests.SM3Digest;
-import org.bouncycastle.crypto.engines.SM4Engine;
 import org.bouncycastle.crypto.macs.HMac;
 import org.bouncycastle.crypto.params.KeyParameter;
 
@@ -27,8 +30,8 @@ public class RecordStream {
 
     private byte[] clientMacKey;
     private byte[] serverMacKey;
-    private SM4Engine writeCipher;
-    private SM4Engine readCipher;
+    private BlockCipher writeCipher;
+    private BlockCipher readCipher;
     private byte[] clientWriteIV;
     private byte[] serverWriteIV;
 
@@ -47,11 +50,11 @@ public class RecordStream {
         this.serverMacKey = key;
     }
 
-    public void setWriteCipher(SM4Engine writeCipher) {
+    public void setWriteCipher(BlockCipher writeCipher) {
         this.writeCipher = writeCipher;
     }
 
-    public void setReadCipher(SM4Engine readCipher) {
+    public void setReadCipher(BlockCipher readCipher) {
         this.readCipher = readCipher;
     }
 
@@ -91,6 +94,8 @@ public class RecordStream {
     public Record read(boolean encrpted) throws IOException {
         // type(1), version(2), length(2), fragment(length)
         int type = input.read();
+        if(type == -1)
+        	return null;
         ContentType contentType = ContentType.getInstance(type);
         ProtocolVersion version = ProtocolVersion.getInstance(input.read(), input.read());
         // fragment length
@@ -210,7 +215,7 @@ public class RecordStream {
         return new Record(record.contentType, record.version, encrypted);
     }
 
-    private static byte[] encrypt(byte[] bytes, SM4Engine engine, byte[] iv) {
+    private static byte[] encrypt(byte[] bytes, BlockCipher engine, byte[] iv) {
         byte[] out = new byte[bytes.length];
         int times = bytes.length / BLOCK_SIZE;
         byte[] tmp = new byte[BLOCK_SIZE];
@@ -228,7 +233,7 @@ public class RecordStream {
         return out;
     }
 
-    private static byte[] decrypt(byte[] encrypted, SM4Engine engine, byte[] iv) {
+    private static byte[] decrypt(byte[] encrypted, BlockCipher engine, byte[] iv) {
         byte[] decrypted = new byte[encrypted.length];
         int BLOCK_SIZE = 16;
         int times = encrypted.length / BLOCK_SIZE;
@@ -259,7 +264,13 @@ public class RecordStream {
 
     private static byte[] hmacHash(byte[] data, byte[] secret) {
         KeyParameter keyParameter = new KeyParameter(secret);
-        SM3Digest digest = new SM3Digest();
+        GeneralDigest digest = null;
+        if(Crypto.CryptoType == 1) //RSA
+        {
+        	digest = new SHA256Digest();
+        }else {
+        	digest = new SM3Digest();
+        }
         HMac mac = new HMac(digest);
         mac.init(keyParameter);
         mac.update(data, 0, data.length);

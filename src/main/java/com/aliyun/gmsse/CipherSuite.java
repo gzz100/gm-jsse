@@ -8,6 +8,8 @@ final public class CipherSuite {
     // ECC-SM2-WITH-SM4-SM3 0x0300E011
     public static final CipherSuite NTLS_SM2_WITH_SM4_SM3 = new CipherSuite("ECC", "SM2", "SM4", "SM3", 128, 0xe0, 0x13,
             "ECC-SM2-WITH-SM4-SM3", ProtocolVersion.NTLS_1_1);
+    public static final CipherSuite TLS_RSA_WITH_AES_128_CBC_SHA256 = new CipherSuite("RSA", "AES", "SHA256", "CBC", 128, 0x00, 0x3c,
+            "RSA-WITH-AES-128-CBC-SHA256", ProtocolVersion.TLS_3_3);
 
     private String name;
     private byte[] id;
@@ -50,6 +52,15 @@ final public class CipherSuite {
                     default:
                         break;
                 }
+            }
+        }else {
+        	if (id1 == 0x00) {
+            	switch (id2) {
+	            	case 0x3c:
+	                    return TLS_RSA_WITH_AES_128_CBC_SHA256;
+	                default:
+	                    break;
+            	}
             }
         }
         return null;

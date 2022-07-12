@@ -58,6 +58,7 @@ public class ServerKeyExchange extends Handshake.Body {
     public boolean verify(PublicKey publicKey, byte[] clientRandom, byte[] serverRandom, X509Certificate encryptionCert)
             throws IOException, NoSuchAlgorithmException, InvalidAlgorithmParameterException, InvalidKeyException,
             SignatureException, CertificateEncodingException {
+    	
         byte[] certBytes = encryptionCert.getEncoded();
         int length = certBytes.length;
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -66,6 +67,15 @@ public class ServerKeyExchange extends Handshake.Body {
         baos.write(length & 0xff);
         baos.write(certBytes);
 
+        if(publicKey.getAlgorithm() == "RSA")
+    	{
+        	Signature s = Signature.getInstance("SHA256withRSA");
+            s.initVerify(publicKey);
+            s.update(clientRandom);
+            s.update(serverRandom);
+            s.update(baos.toByteArray());
+            return s.verify(signature);
+    	}
         Signature s = Signature.getInstance("SM3withSM2", new BouncyCastleProvider());
         SM2ParameterSpec spec = new SM2ParameterSpec("1234567812345678".getBytes());
         s.setParameter(spec);

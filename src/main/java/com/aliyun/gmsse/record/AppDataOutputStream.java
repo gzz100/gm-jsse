@@ -6,6 +6,7 @@ import java.io.OutputStream;
 import com.aliyun.gmsse.ProtocolVersion;
 import com.aliyun.gmsse.Record;
 import com.aliyun.gmsse.RecordStream;
+import com.aliyun.gmsse.crypto.Crypto;
 import com.aliyun.gmsse.Record.ContentType;
 
 public class AppDataOutputStream extends OutputStream {
@@ -30,8 +31,12 @@ public class AppDataOutputStream extends OutputStream {
         } else if (len == 0) {
             return;
         }
-
         ProtocolVersion version = ProtocolVersion.NTLS_1_1;
+
+        if(Crypto.CryptoType == 1)
+        {
+        	version = ProtocolVersion.TLS_3_3;
+        }
         byte[] content = new byte[len];
         System.arraycopy(b, off, content, 0, len);
         Record recored = new Record(ContentType.APPLICATION_DATA, version, content);

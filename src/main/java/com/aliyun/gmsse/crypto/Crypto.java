@@ -3,8 +3,13 @@ package com.aliyun.gmsse.crypto;
 import java.io.IOException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.security.PublicKey;
 import java.security.SecureRandom;
 
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
 import javax.crypto.ShortBufferException;
 
 import org.bouncycastle.asn1.ASN1EncodableVector;
@@ -13,8 +18,9 @@ import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.DERSequence;
 import org.bouncycastle.asn1.gm.GMNamedCurves;
 import org.bouncycastle.asn1.x9.X9ECParameters;
-import org.bouncycastle.crypto.Digest;
 import org.bouncycastle.crypto.InvalidCipherTextException;
+import org.bouncycastle.crypto.digests.GeneralDigest;
+import org.bouncycastle.crypto.digests.SHA256Digest;
 import org.bouncycastle.crypto.digests.SM3Digest;
 import org.bouncycastle.crypto.engines.SM2Engine;
 import org.bouncycastle.crypto.macs.HMac;
@@ -28,10 +34,20 @@ public class Crypto {
     private static X9ECParameters x9ECParameters = GMNamedCurves.getByName("sm2p256v1");
     private static ECDomainParameters ecDomainParameters = new ECDomainParameters(x9ECParameters.getCurve(),
             x9ECParameters.getG(), x9ECParameters.getN());
+    
+    public static int CryptoType = 0;
 
-    public static byte[] encrypt(BCECPublicKey key, byte[] preMasterSecret)
-            throws IOException, InvalidCipherTextException {
-        ECPublicKeyParameters publicKeyParameters = new ECPublicKeyParameters(key.getQ(), ecDomainParameters);
+    public static byte[] encrypt(PublicKey key, byte[] preMasterSecret)
+            throws IOException, InvalidCipherTextException, NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException {
+    	if(CryptoType == 1) //RSA
+    	{
+    		Cipher cipher = null;
+            cipher = Cipher.getInstance("RSA");  
+            // cipher= Cipher.getInstance("RSA", new BouncyCastleProvider());  
+            cipher.init(Cipher.ENCRYPT_MODE, key);  
+            return cipher.doFinal(preMasterSecret);
+    	}
+        ECPublicKeyParameters publicKeyParameters = new ECPublicKeyParameters(((BCECPublicKey)key).getQ(), ecDomainParameters);
         SM2Engine sm2Engine = new SM2Engine(SM2Engine.Mode.C1C3C2);
         sm2Engine.init(true, new ParametersWithRandom(publicKeyParameters, new SecureRandom()));
         byte[] c1c3c2 = sm2Engine.processBlock(preMasterSecret, 0, preMasterSecret.length);
@@ -57,7 +73,7 @@ public class Crypto {
         return encode(c1x, c1y, c3, c2);
     }
 
-    public static byte[] encode(byte[] c1x, byte[] c1y, byte[] c3, byte[] c2) throws IOException {
+    private static byte[] encode(byte[] c1x, byte[] c1y, byte[] c3, byte[] c2) throws IOException {
         ASN1EncodableVector v = new ASN1EncodableVector();
         v.add(new ASN1Integer(c1x));
         v.add(new ASN1Integer(c1y));
@@ -77,7 +93,14 @@ public class Crypto {
     private static void hmacHash(byte[] secret, byte[] seed, byte[] output)
             throws InvalidKeyException, NoSuchAlgorithmException, ShortBufferException, IllegalStateException {
         KeyParameter keyParameter = new KeyParameter(secret);
-        SM3Digest digest = new SM3Digest();
+        GeneralDigest digest = null;
+        if(CryptoType == 1) //RSA
+        {
+        	digest = new SHA256Digest();
+        }else {
+        	digest = new SM3Digest();
+        }
+        
         HMac mac = new HMac(digest);
         mac.init(keyParameter);
 
@@ -100,6 +123,7 @@ public class Crypto {
             pos += macSize;
         }
     }
+    
 
     /**
      * PRF实现
@@ -119,7 +143,13 @@ public class Crypto {
     }
 
     public static byte[] hash(byte[] bytes) {
-        Digest digest = new SM3Digest();
+    	GeneralDigest digest = null;
+    	if(CryptoType == 1) //RSA
+    	{
+    		digest = new SHA256Digest();
+    	}else {
+    		digest = new SM3Digest();
+    	}
         byte[] output = new byte[digest.getDigestSize()];
         digest.update(bytes, 0, bytes.length);
         digest.doFinal(output, 0);

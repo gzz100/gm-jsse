@@ -28,6 +28,8 @@ public class AppDataInputStream extends InputStream {
     	if(lastRecordAvailableLength <= 0)
     	{
     		lastRecord = recordStream.read(true);
+    		if(lastRecord == null)
+    			return -1;
     		lastRecordAvailableLength = lastRecord.fragment.length;
     	}
         int length = Math.min(lastRecordAvailableLength, len);

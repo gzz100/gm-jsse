@@ -5,7 +5,6 @@ import com.aliyun.gmsse.Util;
 import com.aliyun.gmsse.crypto.Crypto;
 import com.aliyun.gmsse.record.Handshake;
 import com.aliyun.gmsse.record.Handshake.Body;
-import org.bouncycastle.jcajce.provider.asymmetric.ec.BCECPublicKey;
 
 import java.io.*;
 import java.security.SecureRandom;
@@ -24,7 +23,7 @@ public class ClientKeyExchange extends Handshake.Body {
         ba.write(random.generateSeed(46));
         this.preMasterSecret = ba.toByteArray();
         try {
-            this.encryptedPreMasterSecret = Crypto.encrypt((BCECPublicKey) certificate.getPublicKey(),
+            this.encryptedPreMasterSecret = Crypto.encrypt(certificate.getPublicKey(),
                     this.preMasterSecret);
         } catch (Exception ex) {
             throw new RuntimeException(ex.getMessage(), ex);
