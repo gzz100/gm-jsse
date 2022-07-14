@@ -40,7 +40,7 @@ public class CertificateVerify extends Handshake.Body {
 	        sign = new DERSequence(aSN1EncodableArray).getEncoded("DER");
 	    	this.sign = sign;
         }else {
-        	sa = new byte[]{4,1}; //SHA1=2 RSA=1
+        	sa = new byte[]{2,1}; //SHA1=2 SHA256=4 ,RSA=1
         	byte[] data  =out.toByteArray();
         	this.sign = keyManager.doSign(data, 0, data.length);
         }
