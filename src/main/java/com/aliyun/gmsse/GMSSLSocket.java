@@ -66,7 +66,6 @@ public class GMSSLSocket extends SSLSocket {
     private String remoteHost;
     private boolean clientMode;
     private Socket underlyingSocket;
-    private int underlyingPort;
     private boolean autoClose;
     // raw socket in/out
     private InputStream socketIn;
@@ -79,6 +78,7 @@ public class GMSSLSocket extends SSLSocket {
     public GMSSLSocket(String host, int port) throws IOException {
         super(host, port);
         remoteHost = host;
+        this.port = port;
         initialize();
     }
 
@@ -94,6 +94,7 @@ public class GMSSLSocket extends SSLSocket {
     public GMSSLSocket(InetAddress host, int port) throws IOException {
         super(host, port);
         remoteHost = host.getHostName();
+        this.port = port;
         if (remoteHost == null) {
             remoteHost = host.getHostAddress();
         }
@@ -103,7 +104,7 @@ public class GMSSLSocket extends SSLSocket {
     public GMSSLSocket(Socket socket, String host, int port, boolean autoClose) throws IOException {
         underlyingSocket = socket;
         remoteHost = host;
-        underlyingPort = port;
+        this.port = port;
         this.autoClose = autoClose;
         initialize();
     }
@@ -111,6 +112,7 @@ public class GMSSLSocket extends SSLSocket {
     @Override
 	public void connect(SocketAddress endpoint, int timeout) throws IOException {
     	remoteHost = ((InetSocketAddress)endpoint).getHostName();
+        this.port = ((InetSocketAddress)endpoint).getPort();
 		super.connect(endpoint, timeout);
 	}
 
