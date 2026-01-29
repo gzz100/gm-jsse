@@ -113,7 +113,11 @@ public class GMSSLSocket extends SSLSocket {
 	public void connect(SocketAddress endpoint, int timeout) throws IOException {
     	remoteHost = ((InetSocketAddress)endpoint).getHostName();
         this.port = ((InetSocketAddress)endpoint).getPort();
-		super.connect(endpoint, timeout);
+        if (underlyingSocket != null) {
+            underlyingSocket.connect(endpoint, timeout);
+        } else {
+            super.connect(endpoint, timeout);
+        }
 	}
 
 
@@ -219,7 +223,8 @@ public class GMSSLSocket extends SSLSocket {
             throw new IllegalArgumentException();
         }
         for (int i = 0; i < protocols.length; i++) {
-            if (!(protocols[i].equalsIgnoreCase("NTLSv1.1"))) {
+        	if (!(protocols[i].equalsIgnoreCase("NTLSv1.1") || 
+        		      protocols[i].equalsIgnoreCase("TLSv1.2"))) {
                 throw new IllegalArgumentException("unsupported protocol: " + protocols[i]);
             }
         }
