@@ -25,11 +25,9 @@ public class Alert implements RecordFragment {
         public final static Level WARNING = new Level(1, "warning");
         public final static Level FATAL = new Level(2, "fatal");
         private int value;
-        private String name;
 
         public Level(int value, String name) {
             this.value = value;
-            this.name = name;
         }
 
         public static Level getInstance(int value) {

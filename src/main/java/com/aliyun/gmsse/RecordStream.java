@@ -285,8 +285,6 @@ public class RecordStream {
 
     private static class SequenceNumber {
         private long value = 0L;
-        private boolean exhausted = false;
-
         synchronized long nextValue() throws AlertException {
             // if (exhausted)
             // {
@@ -294,7 +292,6 @@ public class RecordStream {
             // }
             long result = value;
             if (++value == 0) {
-                exhausted = true;
             }
             return result;
         }

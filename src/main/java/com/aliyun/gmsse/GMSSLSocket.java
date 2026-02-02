@@ -66,7 +66,6 @@ public class GMSSLSocket extends SSLSocket {
     private String remoteHost;
     private boolean clientMode;
     private Socket underlyingSocket;
-    private boolean autoClose;
     // raw socket in/out
     private InputStream socketIn;
     private OutputStream socketOut;
@@ -105,7 +104,6 @@ public class GMSSLSocket extends SSLSocket {
         underlyingSocket = socket;
         remoteHost = host;
         this.port = port;
-        this.autoClose = autoClose;
         initialize();
     }
     
@@ -343,7 +341,7 @@ public class GMSSLSocket extends SSLSocket {
 
     private void receiveChangeCipherSpec() throws IOException {
         Record rc = recordStream.read();
-        ChangeCipherSpec ccs = ChangeCipherSpec.read(new ByteArrayInputStream(rc.fragment));
+        ChangeCipherSpec.read(new ByteArrayInputStream(rc.fragment));
     }
 
     private void sendFinished() throws IOException {
@@ -364,7 +362,6 @@ public class GMSSLSocket extends SSLSocket {
         try {
 	        _cert = ((IKeyManager)session.keyManager).getCert();
 		} catch (CertificateException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
         Certificate ckex = new Certificate(_cert) ;
@@ -566,7 +563,6 @@ public class GMSSLSocket extends SSLSocket {
         Handshake hsf = Handshake.read(_input);
         ServerHello sh = (ServerHello) hsf.body;
         sh.getCompressionMethod();
-        // TODO: process the compresion method
         session.cipherSuite = sh.getCipherSuite();
         session.peerHost = remoteHost;
         session.peerPort = port;

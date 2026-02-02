@@ -3,7 +3,7 @@ package com.aliyun.gmsse;
 import java.io.IOException;
 import java.io.InputStream;
 
-final public class ProtocolVersion implements Comparable {
+final public class ProtocolVersion implements Comparable<Object> {
     public static final ProtocolVersion NTLS_1_1 = new ProtocolVersion(1, 1, "NTLSv1.1");
     public static final ProtocolVersion TLS_3_3 = new ProtocolVersion(3, 3, "TLSv1.2");
 
